@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการห้องปฏิบัติการไวรัส (Virus Lab Management)</title>
+    
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts (Sarabun for Thai) -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f1f5f9; /* Slate 100 */
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden md:flex flex-col z-20 shadow-lg">
+        <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-blue-200 shadow-md">
+                <i class="fa-solid fa-flask"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-blue-900 leading-tight">Virus Lab</h1>
+                <p class="text-xs text-slate-500">Management System</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto p-4 space-y-2">
+            <button onclick="app.navigate('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:bg-blue-50 text-slate-600 hover:text-blue-700">
+                <i class="fa-solid fa-chart-pie w-5"></i> ภาพรวม (Dashboard)
+            </button>
+            <button onclick="app.navigate('cells')" id="nav-cells" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:bg-blue-50 text-slate-600 hover:text-blue-700">
+                <i class="fa-solid fa-dna w-5"></i> สต็อกเซลล์ (Cell Culture)
+            </button>
+            <button onclick="app.navigate('viruses')" id="nav-viruses" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:bg-blue-50 text-slate-600 hover:text-blue-700">
+                <i class="fa-solid fa-virus w-5"></i> สต็อกไวรัส (Virus Inventory)
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-100">
+            <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-800">
+                <i class="fa-solid fa-database mr-1"></i> Data stored on Firestore
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white border-b p-4 flex justify-between items-center shadow-sm z-10">
+            <span class="font-bold text-blue-900 flex items-center gap-2">
+                <i class="fa-solid fa-flask text-blue-600"></i> Virus Lab System
+            </span>
+            <button onclick="document.querySelector('aside').classList.toggle('hidden'); document.querySelector('aside').classList.toggle('absolute'); document.querySelector('aside').classList.toggle('h-full');" class="text-slate-600">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+        </header>
+
+        <!-- Top Bar (Search & Actions) -->
+        <div class="bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 id="page-title" class="text-xl font-bold text-slate-800">ภาพรวม</h2>
+            
+            <div class="flex gap-3 w-full sm:w-auto">
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" onkeyup="app.handleSearch()" placeholder="ค้นหารหัส, ชื่อ..." class="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none">
+                </div>
+                <button id="addBtn" onclick="app.openModal()" class="hidden bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md shadow-blue-200 transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-plus"></i> เพิ่มข้อมูล
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Content Area -->
+        <div id="content-area" class="flex-1 overflow-y-auto p-6 relative">
+            
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="space-y-6 fade-in">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-dna text-xl"></i>
+                        </div>
+                        <span class="text-slate-500 text-sm">จำนวนเซลล์ทั้งหมด</span>
+                        <strong class="text-3xl text-slate-800 mt-1" id="dash-cell-count">Loading...</strong>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-virus text-xl"></i>
+                        </div>
+                        <span class="text-slate-500 text-sm">จำนวนไวรัสทั้งหมด</span>
+                        <strong class="text-3xl text-slate-800 mt-1" id="dash-virus-count">Loading...</strong>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50">
+                        <h3 class="font-semibold text-slate-700"><i class="fa-solid fa-clock-rotate-left mr-2"></i>รายการล่าสุด</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                                <tr>
+                                    <th class="px-6 py-3">ID</th>
+                                    <th class="px-6 py-3">ประเภท</th>
+                                    <th class="px-6 py-3">ชื่อ / สายพันธุ์</th>
+                                    <th class="px-6 py-3">รหัสหลอด (ID)</th>
+                                    <th class="px-6 py-3">วันที่บันทึก</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dash-recent-table">
+                                <!-- JS will populate -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cell Inventory View -->
+            <div id="view-cells" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-slate-600">
+                            <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b">
+                                <tr>
+                                    <th class="px-6 py-3">ID</th>
+                                    <th class="px-6 py-3">ชื่อเซลล์</th>
+                                    <th class="px-6 py-3">Vial ID</th>
+                                    <th class="px-6 py-3">จำนวน</th>
+                                    <th class="px-6 py-3">Passage</th>
+                                    <th class="px-6 py-3">อาหาร (Media)</th>
+                                    <th class="px-6 py-3">สถานที่เก็บ</th>
+                                    <th class="px-6 py-3">วันที่แช่แข็ง</th>
+                                    <th class="px-6 py-3 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cells-table-body">
+                                <!-- JS Populated -->
+                            </tbody>
+                        </table>
+                        <div id="cells-empty" class="hidden p-8 text-center text-slate-400">
+                            <i class="fa-solid fa-inbox text-4xl mb-3"></i>
+                            <p>ไม่พบข้อมูลเซลล์</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Virus Inventory View -->
+            <div id="view-viruses" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-slate-600">
+                            <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b">
+                                <tr>
+                                    <th class="px-6 py-3">ID</th>
+                                    <th class="px-6 py-3">ชื่อไวรัส</th>
+                                    <th class="px-6 py-3">สายพันธุ์ (Strain)</th>
+                                    <th class="px-6 py-3">Vial ID</th>
+                                    <th class="px-6 py-3">จำนวน</th>
+                                    <th class="px-6 py-3">TCID50/ml</th>
+                                    <th class="px-6 py-3">สถานที่เก็บ</th>
+                                    <th class="px-6 py-3">วันที่เก็บ</th>
+                                    <th class="px-6 py-3 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="viruses-table-body">
+                                <!-- JS Populated -->
+                            </tbody>
+                        </table>
+                        <div id="viruses-empty" class="hidden p-8 text-center text-slate-400">
+                            <i class="fa-solid fa-inbox text-4xl mb-3"></i>
+                            <p>ไม่พบข้อมูลไวรัส</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal for Adding Data -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+            
+            <!-- Header -->
+            <div class="flex justify-between items-center p-6 border-b sticky top-0 bg-white z-10">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">เพิ่มข้อมูล</h3>
+                <button onclick="app.closeModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Cell Form -->
+            <form id="form-cell" class="hidden p-6 space-y-4" onsubmit="app.submitCell(event)">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อเซลล์ (Cell Name)</label>
+                        <input type="text" name="name" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">รหัสหลอด (Vial ID)</label>
+                        <input type="text" name="vialId" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนหลอด</label>
+                        <input type="number" name="quantity" min="1" value="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Passage Number</label>
+                        <input type="number" name="passage" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">อาหารเลี้ยงเชื้อ (Media)</label>
+                        <select name="media" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="DMEM">DMEM</option>
+                            <option value="IMDM">IMDM</option>
+                            <option value="MEM">MEM</option>
+                            <option value="RPMI-1640">RPMI-1640</option>
+                            <option value="Other">อื่นๆ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">สถานที่เก็บ (Tank/Box)</label>
+                        <input type="text" name="location" placeholder="เช่น Tank A, Box 2" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">วันที่แช่แข็ง</label>
+                        <input type="date" name="date" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">ผู้บันทึก</label>
+                    <input type="text" name="user" value="KRITHIRAN" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="pt-4 flex justify-end gap-3">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md">บันทึกข้อมูล</button>
+                </div>
+            </form>
+
+            <!-- Virus Form -->
+            <form id="form-virus" class="hidden p-6 space-y-4" onsubmit="app.submitVirus(event)">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อไวรัส (Virus Name)</label>
+                        <input type="text" name="name" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">สายพันธุ์ (Strain)</label>
+                        <input type="text" name="strain" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">เซลล์เพาะเลี้ยง (Host Cell)</label>
+                        <input type="text" name="hostCell" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">รหัสหลอด (Vial ID)</label>
+                        <input type="text" name="vialId" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนหลอด</label>
+                        <input type="number" name="quantity" min="1" value="1" placeholder="จำนวน" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">วันที่เก็บ</label>
+                        <input type="date" name="date" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">สถานที่เก็บ</label>
+                        <input type="text" name="location" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">TCID50/ml (คำนวณอัตโนมัติ)</label>
+                        <input type="text" name="tcid50" id="tcid50-result" readonly class="w-full bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 text-blue-600 font-bold">
+                    </div>
+                </div>
+
+                <!-- TCID50 Calculator Section -->
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-blue-800 text-sm"><i class="fa-solid fa-calculator mr-2"></i>คำนวณ TCID50 (Reed-Muench)</h4>
+                        <button type="button" onclick="app.calculateTCID50()" class="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">คำนวณ</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-3">
+                        <div>
+                            <label class="block text-slate-600 mb-1">Inoculum Vol (ml)</label>
+                            <input type="number" id="calc-vol" value="0.1" step="0.01" class="w-full border rounded px-2 py-1">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Dilution Factor</label>
+                            <input type="number" id="calc-factor" value="10" class="w-full border rounded px-2 py-1">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Wells/Dilution</label>
+                            <input type="number" id="calc-wells" value="8" class="w-full border rounded px-2 py-1">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 mb-1">Start Log Dilution</label>
+                            <input type="number" id="calc-start" value="-1" placeholder="-1" class="w-full border rounded px-2 py-1">
+                        </div>
+                    </div>
+
+                    <table class="w-full text-xs text-center bg-white rounded overflow-hidden">
+                        <thead class="bg-blue-100 text-blue-800">
+                            <tr>
+                                <th class="py-1">Dilution</th>
+                                <th class="py-1">Positive Wells</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calc-rows">
+                            <!-- Generated by JS -->
+                        </tbody>
+                    </table>
+                    <p id="calc-error" class="text-red-500 text-xs mt-2 hidden"></p>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md">บันทึกข้อมูลไวรัส</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, collection, addDoc, setDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        // Detect Environment (Canvas vs Custom Host)
+        const isCanvas = typeof __firebase_config !== 'undefined';
+
+        // 1. Dual Config Strategy
+        let firebaseConfig;
+        let appId;
+
+        if (isCanvas) {
+            // Environment: Canvas (Use System Config)
+            firebaseConfig = JSON.parse(__firebase_config);
+            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            console.log("Running in Canvas Mode: Using System Firebase Config");
+        } else {
+            // Environment: Custom Host (Use User Config)
+            firebaseConfig = {
+                apiKey: 'AIzaSyBmFPLdczBMxlWBOssPbhIzrk1ccwhyOGk',
+                authDomain: 'virus-inventory.firebaseapp.com',
+                projectId: 'virus-inventory',
+                storageBucket: 'virus-inventory.firebasestorage.app',
+                messagingSenderId: '706345330987',
+                appId: '1:706345330987:web:33ebb4275ee6a54c2f7d6e'
+            };
+            appId = 'virus-inventory'; // Placeholder for custom logic if needed
+            console.log("Running in Custom Mode: Using Provided Firebase Config");
+        }
+
+        const appInstance = initializeApp(firebaseConfig);
+        const auth = getAuth(appInstance);
+        const db = getFirestore(appInstance);
+
+        const app = {
+            data: {
+                cells: [],
+                viruses: []
+            },
+            currentView: 'dashboard',
+            userId: null,
+
+            init() {
+                // 2. Dual Auth Strategy
+                const initAuth = async () => {
+                    try {
+                        if (isCanvas && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            // Canvas: Use Custom Token
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            // Custom Host: Use Anonymous Auth
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication Error:", error);
+                        if (error.code === 'auth/configuration-not-found') {
+                            alert("Config Error: Authentication is not enabled in your Firebase Console.");
+                        }
+                    }
+                };
+                initAuth();
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        this.userId = user.uid;
+                        this.setupListeners();
+                    }
+                });
+
+                // Set default date inputs to today
+                document.querySelectorAll('input[type="date"]').forEach(input => {
+                    input.valueAsDate = new Date();
+                });
+
+                // Initialize Calculator Rows
+                this.renderCalculatorRows();
+
+                // Initial Render
+                this.navigate('dashboard');
+            },
+
+            // 3. Dual Path Strategy
+            getCollectionRef(collectionName) {
+                if (isCanvas) {
+                    // Canvas: Use Artifacts Path to prevent Permission Denied
+                    return collection(db, 'artifacts', appId, 'users', this.userId, collectionName);
+                } else {
+                    // Custom Host: Use Root Collection as requested
+                    return collection(db, collectionName);
+                }
+            },
+
+            getDocRef(collectionName, docId) {
+                if (isCanvas) {
+                    return doc(db, 'artifacts', appId, 'users', this.userId, collectionName, docId);
+                } else {
+                    return doc(db, collectionName, docId);
+                }
+            },
+
+            setupListeners() {
+                if (!this.userId) return;
+
+                // Listen for Cells
+                onSnapshot(this.getCollectionRef('cells'), (snapshot) => {
+                    this.data.cells = snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }));
+                    this.refreshView();
+                }, (error) => console.error("Error reading cells:", error));
+
+                // Listen for Viruses
+                onSnapshot(this.getCollectionRef('viruses'), (snapshot) => {
+                    this.data.viruses = snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }));
+                    this.refreshView();
+                }, (error) => console.error("Error reading viruses:", error));
+            },
+
+            saveData() {
+                // No-op
+            },
+
+            navigate(view) {
+                this.currentView = view;
+                
+                // Sidebar Active State
+                document.querySelectorAll('.nav-item').forEach(el => {
+                    el.classList.remove('bg-blue-50', 'text-blue-700');
+                    el.classList.add('text-slate-600');
+                });
+                const activeNav = document.getElementById(`nav-${view}`);
+                if (activeNav) {
+                    activeNav.classList.add('bg-blue-50', 'text-blue-700');
+                    activeNav.classList.remove('text-slate-600');
+                }
+
+                // Show/Hide Views
+                document.getElementById('view-dashboard').classList.add('hidden');
+                document.getElementById('view-cells').classList.add('hidden');
+                document.getElementById('view-viruses').classList.add('hidden');
+                
+                document.getElementById(`view-${view}`).classList.remove('hidden');
+
+                // Header & Buttons
+                const addBtn = document.getElementById('addBtn');
+                const pageTitle = document.getElementById('page-title');
+
+                if (view === 'dashboard') {
+                    pageTitle.innerText = "ภาพรวม (Dashboard)";
+                    addBtn.classList.add('hidden');
+                    this.renderDashboard();
+                } else if (view === 'cells') {
+                    pageTitle.innerText = "สต็อกเซลล์ (Cell Inventory)";
+                    addBtn.classList.remove('hidden');
+                    this.renderCells();
+                } else if (view === 'viruses') {
+                    pageTitle.innerText = "สต็อกไวรัส (Virus Inventory)";
+                    addBtn.classList.remove('hidden');
+                    this.renderViruses();
+                }
+            },
+
+            refreshView() {
+                this.navigate(this.currentView);
+            },
+
+            handleSearch() {
+                const query = document.getElementById('searchInput').value.toLowerCase();
+                if (this.currentView === 'cells') this.renderCells(query);
+                if (this.currentView === 'viruses') this.renderViruses(query);
+            },
+
+            // --- RENDER FUNCTIONS ---
+
+            renderDashboard() {
+                document.getElementById('dash-cell-count').innerText = this.data.cells.length;
+                document.getElementById('dash-virus-count').innerText = this.data.viruses.length;
+                
+                const recentTable = document.getElementById('dash-recent-table');
+                recentTable.innerHTML = '';
+                
+                // Combine and sort by date (newest first)
+                const allItems = [
+                    ...this.data.cells.map(c => ({...c, type: 'Cell', display: c.name, id: c.vialId, sysId: c.systemId})),
+                    ...this.data.viruses.map(v => ({...v, type: 'Virus', display: `${v.name} (${v.strain || '-'})`, id: v.vialId, sysId: v.systemId}))
+                ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
+                allItems.forEach(item => {
+                    const row = `
+                        <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
+                            <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${item.sysId || '-'}</td>
+                            <td class="px-6 py-4 font-medium ${item.type === 'Cell' ? 'text-green-600' : 'text-red-600'}">
+                                <i class="fa-solid ${item.type === 'Cell' ? 'fa-dna' : 'fa-virus'} mr-2"></i>${item.type}
+                            </td>
+                            <td class="px-6 py-4 font-medium text-slate-800">${item.display}</td>
+                            <td class="px-6 py-4 text-slate-500 font-mono text-xs">${item.id}</td>
+                            <td class="px-6 py-4 text-slate-500">${item.date}</td>
+                        </tr>
+                    `;
+                    recentTable.innerHTML += row;
+                });
+            },
+
+            renderCells(query = '') {
+                const tbody = document.getElementById('cells-table-body');
+                const emptyState = document.getElementById('cells-empty');
+                tbody.innerHTML = '';
+
+                const filtered = this.data.cells.filter(c => 
+                    c.name.toLowerCase().includes(query) || 
+                    c.vialId.toLowerCase().includes(query) ||
+                    c.location.toLowerCase().includes(query)
+                );
+
+                if (filtered.length === 0) {
+                    emptyState.classList.remove('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                    filtered.forEach((cell, index) => {
+                        const row = `
+                            <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
+                                <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${cell.systemId || '-'}</td>
+                                <td class="px-6 py-4 font-bold text-slate-700">${cell.name}</td>
+                                <td class="px-6 py-4 font-mono text-xs text-blue-600 bg-blue-50 w-fit rounded px-2 py-1">${cell.vialId}</td>
+                                <td class="px-6 py-4 text-slate-500 text-xs">${cell.quantity || 1}</td>
+                                <td class="px-6 py-4">${cell.passage || '-'}</td>
+                                <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">${cell.media}</span></td>
+                                <td class="px-6 py-4 text-slate-600"><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${cell.location || '-'}</td>
+                                <td class="px-6 py-4 text-slate-500 text-xs">${cell.date}</td>
+                                <td class="px-6 py-4 text-center">
+                                    <button onclick="app.deleteItem('cells', '${cell._id}')" class="text-red-400 hover:text-red-600 transition-colors">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.innerHTML += row;
+                    });
+                }
+            },
+
+            renderViruses(query = '') {
+                const tbody = document.getElementById('viruses-table-body');
+                const emptyState = document.getElementById('viruses-empty');
+                tbody.innerHTML = '';
+
+                const filtered = this.data.viruses.filter(v => 
+                    v.name.toLowerCase().includes(query) || 
+                    v.vialId.toLowerCase().includes(query) ||
+                    (v.strain && v.strain.toLowerCase().includes(query))
+                );
+
+                if (filtered.length === 0) {
+                    emptyState.classList.remove('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                    filtered.forEach((virus, index) => {
+                        const row = `
+                            <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
+                                <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${virus.systemId || '-'}</td>
+                                <td class="px-6 py-4 font-bold text-slate-700">${virus.name}</td>
+                                <td class="px-6 py-4 italic text-slate-500">${virus.strain || '-'}</td>
+                                <td class="px-6 py-4 font-mono text-xs text-blue-600 bg-blue-50 w-fit rounded px-2 py-1">${virus.vialId}</td>
+                                <td class="px-6 py-4 text-slate-500 text-xs">${virus.quantity || 1}</td>
+                                <td class="px-6 py-4 font-mono font-bold text-slate-800">${virus.tcid50 || 'N/A'}</td>
+                                <td class="px-6 py-4 text-slate-600"><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${virus.location || '-'}</td>
+                                <td class="px-6 py-4 text-slate-500 text-xs">${virus.date}</td>
+                                <td class="px-6 py-4 text-center">
+                                    <button onclick="app.deleteItem('viruses', '${virus._id}')" class="text-red-400 hover:text-red-600 transition-colors">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.innerHTML += row;
+                    });
+                }
+            },
+
+            // --- MODAL & FORM FUNCTIONS ---
+
+            generateNextSystemId() {
+                const usedIds = new Set();
+                
+                // Collect IDs from both collections
+                if (this.data.cells) {
+                    this.data.cells.forEach(c => {
+                        if (c.systemId) usedIds.add(parseInt(c.systemId));
+                    });
+                }
+                if (this.data.viruses) {
+                    this.data.viruses.forEach(v => {
+                        if (v.systemId) usedIds.add(parseInt(v.systemId));
+                    });
+                }
+
+                // Find smallest available ID starting from 1
+                let id = 1;
+                while (usedIds.has(id)) {
+                    id++;
+                }
+                
+                // Format as 4 digits (e.g. 0001)
+                return id.toString().padStart(4, '0');
+            },
+
+            openModal() {
+                const overlay = document.getElementById('modal-overlay');
+                const title = document.getElementById('modal-title');
+                const formCell = document.getElementById('form-cell');
+                const formVirus = document.getElementById('form-virus');
+
+                // Reset forms
+                formCell.reset();
+                formVirus.reset();
+                document.getElementById('tcid50-result').value = '';
+                this.renderCalculatorRows(); // Reset calc inputs
+
+                overlay.classList.remove('hidden');
+                
+                if (this.currentView === 'cells') {
+                    title.innerText = "เพิ่มข้อมูลเซลล์ (Add Cell)";
+                    formCell.classList.remove('hidden');
+                    formVirus.classList.add('hidden');
+                } else {
+                    title.innerText = "เพิ่มข้อมูลไวรัส (Add Virus)";
+                    formCell.classList.add('hidden');
+                    formVirus.classList.remove('hidden');
+                }
+            },
+
+            closeModal() {
+                document.getElementById('modal-overlay').classList.add('hidden');
+            },
+
+            async submitCell(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newCell = Object.fromEntries(formData.entries());
+                
+                // Generate sequential System ID
+                newCell.systemId = this.generateNextSystemId();
+
+                if (this.userId) {
+                    // ใช้ setDoc ร่วมกับ getDocRef เพื่อระบุว่าให้ใช้ systemId เป็นชื่อ Document
+                    await setDoc(this.getDocRef('cells', newCell.systemId), newCell);
+                }
+                
+                this.closeModal();
+            },
+
+            async submitVirus(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newVirus = Object.fromEntries(formData.entries());
+                
+                // Generate sequential System ID
+                newVirus.systemId = this.generateNextSystemId();
+
+                if (this.userId) {
+                    // ใช้ setDoc ร่วมกับ getDocRef เพื่อระบุว่าให้ใช้ systemId เป็นชื่อ Document
+                    await setDoc(this.getDocRef('viruses', newVirus.systemId), newVirus);
+                }
+
+                this.closeModal();
+            },
+
+            async deleteItem(type, id) { // เปลี่ยนจาก index เป็น id
+                if(confirm('ยืนยันการลบข้อมูลนี้? (การกระทำนี้ไม่สามารถย้อนกลับได้)')) {
+                    if (id && this.userId) {
+                        await deleteDoc(this.getDocRef(type, id));
+                    }
+                }
+            },
+
+            // --- TCID50 CALCULATOR (Reed-Muench) ---
+            
+            renderCalculatorRows() {
+                const tbody = document.getElementById('calc-rows');
+                tbody.innerHTML = '';
+                // Generate 10 input rows for dilution steps
+                for(let i=0; i<10; i++) {
+                    tbody.innerHTML += `
+                        <tr class="border-b border-slate-100">
+                            <td class="py-1 text-slate-500 font-mono">10^<span class="dilution-exp-label" data-idx="${i}">-${i+1}</span></td>
+                            <td class="py-1"><input type="number" min="0" class="w-16 text-center border rounded calc-pos-input bg-slate-50 focus:bg-white" data-index="${i}"></td>
+                        </tr>
+                    `;
+                }
+                
+                // Add listener to update labels if start dilution changes
+                document.getElementById('calc-start').addEventListener('input', (e) => {
+                    const start = parseInt(e.target.value) || -1;
+                    document.querySelectorAll('.dilution-exp-label').forEach((span, idx) => {
+                        span.innerText = start - idx;
+                    });
+                });
+            },
+
+            calculateTCID50() {
+                const errorEl = document.getElementById('calc-error');
+                errorEl.classList.add('hidden');
+
+                try {
+                    const vol = parseFloat(document.getElementById('calc-vol').value);
+                    const wellsPerDilution = parseInt(document.getElementById('calc-wells').value);
+                    const startLog = parseInt(document.getElementById('calc-start').value); // e.g. -1
+                    
+                    const inputs = document.querySelectorAll('.calc-pos-input');
+                    let positives = [];
+                    
+                    inputs.forEach(input => {
+                        const val = parseInt(input.value);
+                        if (isNaN(val)) throw new Error("กรุณากรอกจำนวนหลุมที่ติดเชื้อให้ครบ");
+                        if (val > wellsPerDilution) throw new Error(`จำนวน Positive ต้องไม่เกิน ${wellsPerDilution}`);
+                        positives.push(val);
+                    });
+
+                    // Logic for Reed-Muench
+                    // 1. Calculate Proportionate Distance (PD)
+                    // Formula: (Percentage positive at dilution > 50% - 50%) / (Percentage positive > 50% - Percentage positive < 50%)
+                    
+                    let dilutionAbove50Index = -1;
+                    let percentages = positives.map(p => (p / wellsPerDilution) * 100);
+
+                    // Find the dilution immediately above 50%
+                    for (let i = 0; i < percentages.length - 1; i++) {
+                        if (percentages[i] >= 50 && percentages[i+1] < 50) {
+                            dilutionAbove50Index = i;
+                            break;
+                        }
+                    }
+
+                    let tcid50Value = 0;
+
+                    if (dilutionAbove50Index === -1) {
+                        // Fallback or Error handling if data doesn't cross 50%
+                        // If all 100%, endpoint is lower than tested. If all 0%, endpoint is higher.
+                        if(percentages[0] < 50) throw new Error("เจือจางมากไป (Dilution ต่ำสุด < 50%)");
+                        if(percentages[percentages.length-1] > 50) throw new Error("เจือจางน้อยไป (Dilution สูงสุด > 50%)");
+                    } else {
+                        const pctAbove = percentages[dilutionAbove50Index];
+                        const pctBelow = percentages[dilutionAbove50Index + 1];
+                        
+                        const pd = (pctAbove - 50) / (pctAbove - pctBelow);
+                        
+                        // Log ID50 = Log(Dilution above 50%) - (PD * Log(Dilution Factor))
+                        // Assuming 10-fold dilution, Log(Dilution Factor) = 1
+                        
+                        const logDilutionAbove = startLog - dilutionAbove50Index; 
+                        const logID50 = logDilutionAbove - pd; // Since dilution is 10^-x, negative numbers logic applies
+                        
+                        // TCID50 per volume used = 10^(logID50) note: usually expressed as reciprocal titer
+                        // But convention: Titer = 10 ^ -(LogID50) per inoculum volume
+                        
+                        const titerPerVol = Math.pow(10, -logID50);
+                        
+                        // Convert to per ml
+                        const titerPerMl = titerPerVol / vol;
+                        
+                        // Format as 10^x.xx
+                        if (titerPerMl > 0) {
+                            const log10Result = Math.log10(titerPerMl);
+                            tcid50Value = `10^${log10Result.toFixed(2)}`;
+                        } else {
+                            tcid50Value = '0';
+                        }
+                    }
+
+                    document.getElementById('tcid50-result').value = tcid50Value;
+
+                } catch (err) {
+                    errorEl.innerText = err.message;
+                    errorEl.classList.remove('hidden');
+                }
+            }
+        };
+
+        // Attach app to window so HTML event handlers can see it
+        window.app = app;
+
+        // Start App
+        app.init();
+    </script>
+</body>
+</html>
