@@ -14,6 +14,8 @@
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         body {
             font-family: 'Sarabun', sans-serif;
@@ -107,7 +109,6 @@
         <!-- Scrollable Content Area -->
         <div id="content-area" class="flex-1 overflow-y-auto p-6 relative">
             
-            <!-- Dashboard View -->
             <div id="view-dashboard" class="space-y-6 fade-in">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md transition-shadow">
@@ -124,11 +125,40 @@
                         <span class="text-slate-500 text-sm">จำนวนไวรัสทั้งหมด</span>
                         <strong class="text-3xl text-slate-800 mt-1" id="dash-virus-count">Loading...</strong>
                     </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-vial text-xl"></i>
+                        </div>
+                        <span class="text-slate-500 text-sm">รวมหลอดทั้งหมดในสต็อก</span>
+                        <strong class="text-3xl text-slate-800 mt-1" id="dash-total-vials">Loading...</strong>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mb-3">
+                            <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                        </div>
+                        <span class="text-slate-500 text-sm">สถานที่เก็บทั้งหมด</span>
+                        <strong class="text-3xl text-slate-800 mt-1" id="dash-total-locations">Loading...</strong>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="font-semibold text-slate-700 mb-4"><i class="fa-solid fa-chart-pie mr-2"></i>สัดส่วน เซลล์ / ไวรัส</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="dashPieChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="font-semibold text-slate-700 mb-4"><i class="fa-solid fa-chart-bar mr-2"></i>จำนวนรายการจำแนกตามสถานที่เก็บ (Storage)</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="dashBarChart"></canvas>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                     <div class="p-4 border-b border-slate-100 bg-slate-50">
-                        <h3 class="font-semibold text-slate-700"><i class="fa-solid fa-clock-rotate-left mr-2"></i>รายการล่าสุด</h3>
+                        <h3 class="font-semibold text-slate-700"><i class="fa-solid fa-clock-rotate-left mr-2"></i>รายการทั้งหมดในระบบ</h3>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
@@ -142,15 +172,43 @@
                                 </tr>
                             </thead>
                             <tbody id="dash-recent-table">
-                                <!-- JS will populate -->
-                            </tbody>
+                                </tbody>
                         </table>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-slate-500">แสดง</span>
+                            <select id="limit-dashboard" onchange="app.changeLimit('dashboard', this.value)" class="text-sm border rounded px-2 py-1 outline-none">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="text-sm text-slate-500">รายการ</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <button id="prev-dashboard" onclick="app.changePage('dashboard', -1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ก่อนหน้า</button>
+                            <span class="text-slate-600">หน้า <span id="page-dashboard">1</span>/<span id="total-dashboard">1</span></span>
+                            <button id="next-dashboard" onclick="app.changePage('dashboard', 1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ถัดไป</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Cell Inventory View -->
-            <div id="view-cells" class="hidden fade-in">
+            <div id="view-cells" class="hidden fade-in space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-700"><i class="fa-solid fa-chart-line mr-2"></i>วิเคราะห์ข้อมูลเซลล์ (Cell Analytics)</h3>
+                        <select id="cellChartSelect" onchange="app.updateCellChartMode(this.value)" class="text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="name">แยกตามชื่อเซลล์</option>
+                            <option value="media">แยกตามอาหารเลี้ยงเชื้อ (Media)</option>
+                            <option value="location">แยกตามสถานที่เก็บ</option>
+                        </select>
+                    </div>
+                    <div class="relative h-64 w-full flex justify-center">
+                        <canvas id="cellsChart"></canvas>
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left text-slate-600">
@@ -168,19 +226,33 @@
                                 </tr>
                             </thead>
                             <tbody id="cells-table-body">
-                                <!-- JS Populated -->
-                            </tbody>
+                                </tbody>
                         </table>
                         <div id="cells-empty" class="hidden p-8 text-center text-slate-400">
                             <i class="fa-solid fa-inbox text-4xl mb-3"></i>
                             <p>ไม่พบข้อมูลเซลล์</p>
                         </div>
                     </div>
+                    <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-slate-500">แสดง</span>
+                            <select id="limit-cells" onchange="app.changeLimit('cells', this.value)" class="text-sm border rounded px-2 py-1 outline-none">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="text-sm text-slate-500">รายการ</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <button id="prev-cells" onclick="app.changePage('cells', -1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ก่อนหน้า</button>
+                            <span class="text-slate-600">หน้า <span id="page-cells">1</span>/<span id="total-cells">1</span></span>
+                            <button id="next-cells" onclick="app.changePage('cells', 1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ถัดไป</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Virus Inventory View -->
-            <div id="view-viruses" class="hidden fade-in">
+            <div id="view-viruses" class="hidden fade-in space-y-6">
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left text-slate-600">
@@ -198,12 +270,27 @@
                                 </tr>
                             </thead>
                             <tbody id="viruses-table-body">
-                                <!-- JS Populated -->
-                            </tbody>
+                                </tbody>
                         </table>
                         <div id="viruses-empty" class="hidden p-8 text-center text-slate-400">
                             <i class="fa-solid fa-inbox text-4xl mb-3"></i>
                             <p>ไม่พบข้อมูลไวรัส</p>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-slate-500">แสดง</span>
+                            <select id="limit-viruses" onchange="app.changeLimit('viruses', this.value)" class="text-sm border rounded px-2 py-1 outline-none">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="text-sm text-slate-500">รายการ</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <button id="prev-viruses" onclick="app.changePage('viruses', -1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ก่อนหน้า</button>
+                            <span class="text-slate-600">หน้า <span id="page-viruses">1</span>/<span id="total-viruses">1</span></span>
+                            <button id="next-viruses" onclick="app.changePage('viruses', 1)" class="px-3 py-1 bg-white border rounded hover:bg-slate-100 text-slate-600 disabled:opacity-50">ถัดไป</button>
                         </div>
                     </div>
                 </div>
@@ -477,6 +564,19 @@
             currentView: 'dashboard',
             userId: null,
             editingId: null,
+            
+            // New states for charts and pagination
+            charts: {
+                dashPie: null,
+                dashBar: null,
+                cellsDist: null
+            },
+            cellChartMode: 'name', // name, media, location
+            pagination: {
+                dashboard: { page: 1, limit: 10 },
+                cells: { page: 1, limit: 10 },
+                viruses: { page: 1, limit: 10 }
+            },
 
             init() {
                 // 2. Dual Auth Strategy
@@ -606,22 +706,149 @@
                 if (this.currentView === 'viruses') this.renderViruses(query);
             },
 
+            // --- PAGINATION & CHART HELPERS ---
+            
+            changePage(view, direction) {
+                this.pagination[view].page += direction;
+                this.refreshView();
+            },
+
+            changeLimit(view, newLimit) {
+                this.pagination[view].limit = parseInt(newLimit);
+                this.pagination[view].page = 1; // Reset to first page
+                this.refreshView();
+            },
+
+            updatePaginationUI(view, totalItems) {
+                const { page, limit } = this.pagination[view];
+                const totalPages = Math.ceil(totalItems / limit) || 1;
+                
+                // Keep page in bounds
+                if (page > totalPages) this.pagination[view].page = totalPages;
+
+                document.getElementById(`page-${view}`).innerText = this.pagination[view].page;
+                document.getElementById(`total-${view}`).innerText = totalPages;
+                
+                document.getElementById(`prev-${view}`).disabled = this.pagination[view].page <= 1;
+                document.getElementById(`next-${view}`).disabled = this.pagination[view].page >= totalPages;
+                document.getElementById(`limit-${view}`).value = limit;
+            },
+
+            paginateData(dataArray, view) {
+                const { page, limit } = this.pagination[view];
+                const startIndex = (page - 1) * limit;
+                return dataArray.slice(startIndex, startIndex + limit);
+            },
+
+            updateCellChartMode(mode) {
+                this.cellChartMode = mode;
+                this.renderCellsChart();
+            },
+
+            renderDashboardCharts() {
+                // Pie Chart
+                const pieCtx = document.getElementById('dashPieChart');
+                if (this.charts.dashPie) this.charts.dashPie.destroy();
+                
+                this.charts.dashPie = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['เซลล์ (Cells)', 'ไวรัส (Viruses)'],
+                        datasets: [{
+                            data: [this.data.cells.length, this.data.viruses.length],
+                            backgroundColor: ['#22c55e', '#ef4444'], // Green and Red
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: { maintainAspectRatio: false }
+                });
+
+                // Bar Chart - Location Distribution
+                const barCtx = document.getElementById('dashBarChart');
+                if (this.charts.dashBar) this.charts.dashBar.destroy();
+
+                const locations = {};
+                [...this.data.cells, ...this.data.viruses].forEach(item => {
+                    const loc = item.location || 'ไม่ได้ระบุ (N/A)';
+                    locations[loc] = (locations[loc] || 0) + 1;
+                });
+
+                this.charts.dashBar = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(locations),
+                        datasets: [{
+                            label: 'จำนวนรายการสะสม',
+                            data: Object.values(locations),
+                            backgroundColor: '#3b82f6', // Blue
+                            borderRadius: 6
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            },
+
+            renderCellsChart() {
+                const ctx = document.getElementById('cellsChart');
+                if (!ctx) return;
+                if (this.charts.cellsDist) this.charts.cellsDist.destroy();
+
+                const counts = {};
+                this.data.cells.forEach(cell => {
+                    const key = cell[this.cellChartMode] || 'ไม่ได้ระบุ (N/A)';
+                    counts[key] = (counts[key] || 0) + 1;
+                });
+
+                // สร้างสีอัตโนมัติตามจำนวนตัวแปร
+                const bgColors = Object.keys(counts).map((_, i) => `hsl(${(i * 360) / Object.keys(counts).length}, 70%, 60%)`);
+
+                this.charts.cellsDist = new Chart(ctx, {
+                    type: 'polarArea', 
+                    data: {
+                        labels: Object.keys(counts),
+                        datasets: [{
+                            data: Object.values(counts),
+                            backgroundColor: bgColors,
+                        }]
+                    },
+                    options: { maintainAspectRatio: false }
+                });
+            },
+
             // --- RENDER FUNCTIONS ---
 
             renderDashboard() {
                 document.getElementById('dash-cell-count').innerText = this.data.cells.length;
                 document.getElementById('dash-virus-count').innerText = this.data.viruses.length;
                 
+                // Calculate total vials
+                const totalCellVials = this.data.cells.reduce((sum, cell) => sum + (parseInt(cell.quantity) || 1), 0);
+                const totalVirusVials = this.data.viruses.reduce((sum, virus) => sum + (parseInt(virus.quantity) || 1), 0);
+                document.getElementById('dash-total-vials').innerText = totalCellVials + totalVirusVials;
+
+                // Calculate unique locations
+                const locations = new Set();
+                [...this.data.cells, ...this.data.viruses].forEach(item => {
+                    if (item.location && item.location.trim() !== '') {
+                        locations.add(item.location.trim().toUpperCase());
+                    }
+                });
+                document.getElementById('dash-total-locations').innerText = locations.size;
+                
+                this.renderDashboardCharts();
+
                 const recentTable = document.getElementById('dash-recent-table');
                 recentTable.innerHTML = '';
                 
-                // Combine and sort by date (newest first)
                 const allItems = [
                     ...this.data.cells.map(c => ({...c, type: 'Cell', display: c.name, id: c.vialId, sysId: c.systemId})),
                     ...this.data.viruses.map(v => ({...v, type: 'Virus', display: `${v.name} (${v.strain || '-'})`, id: v.vialId, sysId: v.systemId}))
-                ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+                ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-                allItems.forEach(item => {
+                this.updatePaginationUI('dashboard', allItems.length);
+                const paginatedItems = this.paginateData(allItems, 'dashboard');
+
+                paginatedItems.forEach(item => {
                     const row = `
                         <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
                             <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${item.sysId || '-'}</td>
@@ -642,17 +869,23 @@
                 const emptyState = document.getElementById('cells-empty');
                 tbody.innerHTML = '';
 
+                this.renderCellsChart();
+                document.getElementById('cellChartSelect').value = this.cellChartMode;
+
                 const filtered = this.data.cells.filter(c => 
                     c.name.toLowerCase().includes(query) || 
                     c.vialId.toLowerCase().includes(query) ||
                     c.location.toLowerCase().includes(query)
                 );
 
-                if (filtered.length === 0) {
+                this.updatePaginationUI('cells', filtered.length);
+                const paginatedItems = this.paginateData(filtered, 'cells');
+
+                if (paginatedItems.length === 0) {
                     emptyState.classList.remove('hidden');
                 } else {
                     emptyState.classList.add('hidden');
-                    filtered.forEach((cell, index) => {
+                    paginatedItems.forEach((cell, index) => {
                         const row = `
                             <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
                                 <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${cell.systemId || '-'}</td>
@@ -692,11 +925,14 @@
                     (v.strain && v.strain.toLowerCase().includes(query))
                 );
 
-                if (filtered.length === 0) {
+                this.updatePaginationUI('viruses', filtered.length);
+                const paginatedItems = this.paginateData(filtered, 'viruses');
+
+                if (paginatedItems.length === 0) {
                     emptyState.classList.remove('hidden');
                 } else {
                     emptyState.classList.add('hidden');
-                    filtered.forEach((virus, index) => {
+                    paginatedItems.forEach((virus, index) => {
                         const row = `
                             <tr class="bg-white border-b hover:bg-slate-50 transition-colors">
                                 <td class="px-6 py-4 font-mono text-slate-400 text-xs">#${virus.systemId || '-'}</td>
